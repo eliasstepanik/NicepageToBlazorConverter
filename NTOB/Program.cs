@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.VisualBasic.FileIO;
 using NTOB.logic;
 using Serilog;
 using Serilog.Extensions.Logging;
@@ -22,7 +23,8 @@ namespace NTOB
         {
             var Configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile(AppDomain.CurrentDomain.BaseDirectory + "\\appsettings.json", optional: true, reloadOnChange: true)
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                //.AddJsonFile(AppDomain.CurrentDomain.BaseDirectory + "\\appsettings.json", optional: true, reloadOnChange: true)
                 .AddEnvironmentVariables()
                 .Build();          
             
@@ -58,14 +60,18 @@ namespace NTOB
                     "--output-path",
                     "This is the Path where the Blazor Project should be generated."),
                 new Option<bool>(
+                    "--inplace",
+                    "Turn In Place on or off"),
+                new Option<bool>(
                     "--debug",
+                    () => false,
                     "Turn Debug on or off")
             };
             
             rootCommand.Description = "My sample app";
             
             // Note that the parameters of the handler method are matched according to the names of the options
-            rootCommand.Handler = CommandHandler.Create<string, string, bool>((inputPath, outputPath, debug) =>
+            rootCommand.Handler = CommandHandler.Create<string, string, bool,bool>((inputPath, outputPath, debug,inplace) =>
             {
                 if(debug)
                     Log.Logger.Debug("Debug is on");
@@ -73,12 +79,22 @@ namespace NTOB
 
                 if (inputPath == null)
                     throw new ArgumentNullException(nameof(inputPath));
+                if(debug)
+                    Log.Logger.Debug("Input Path was set to '" + inputPath + "'");
+                
+                if (inplace)
+                {
+                    string tempPath = inputPath;
+                    
+                    outputPath = Path.Combine(inputPath, tempPath.Replace(Path.GetDirectoryName(tempPath) + Path.DirectorySeparatorChar, ""));
+                    if(debug)
+                        Log.Logger.Debug("Output Path was set to '" + outputPath + "'");
+                }
                     
                 if(outputPath == null)
                     throw new ArgumentNullException(nameof(outputPath));
 
-
-                ConvertToBlazor(inputPath,outputPath);
+                ConvertToBlazor(inputPath,outputPath,debug);
 
             });
 
@@ -88,27 +104,57 @@ namespace NTOB
         }
         
         
-        public static void ConvertToBlazor(string inputPath, string outputPath)
+        public static void ConvertToBlazor(string inputPath, string outputPath, bool debug)
         {
             
             BlazorPage blazorPage= new BlazorPage("TestApp", outputPath);
             blazorPage.CreatePage();
+            if(debug)
+                Log.Logger.Debug("Blazor Page Generated!");
             
             File.Delete(Path.Combine(inputPath, "index.html"));
+            if(debug)
+                Log.Logger.Debug("index.html deleted!");
+            
+            
+            File.Delete(Path.Combine(outputPath,"Pages", "index.razor"));
+            if(debug)
+                Log.Logger.Debug("index.razor deleted!");
 
             Directory.CreateDirectory(Path.Combine(outputPath, "wwwroot", "nicepage"));
+            if(debug)
+                Log.Logger.Debug("Folder '" + Path.Combine(outputPath, "wwwroot", "nicepage") + "' created!");
+            
             Directory.CreateDirectory(Path.Combine(outputPath, "wwwroot", "nicepage", "css"));
+            if(debug)
+                Log.Logger.Debug("Folder '" + Path.Combine(outputPath, "wwwroot", "nicepage", "css")+ "' created!");
+            
             Directory.CreateDirectory(Path.Combine(outputPath, "wwwroot", "nicepage", "js"));
+            if(debug)
+                Log.Logger.Debug("Folder '" + Path.Combine(outputPath, "wwwroot", "nicepage", "js")+ "' created!");
             
-            File.Move(Path.Combine(inputPath, "nicepage.css"), Path.Combine(outputPath, "wwwroot", "nicepage", "css", "nicepage.css"));
-            File.Move(Path.Combine(inputPath, "nicepage.js"), Path.Combine(outputPath, "wwwroot", "nicepage", "js", "nicepage.js"));
-            File.Move(Path.Combine(inputPath, "jquery.js"), Path.Combine(outputPath, "wwwroot", "nicepage", "js", "jquery.js"));
+            File.Copy(Path.Combine(inputPath, "nicepage.css"), Path.Combine(outputPath, "wwwroot", "nicepage", "css", "nicepage.css"));
+            if(debug)
+                Log.Logger.Debug("Copyed '" + Path.Combine(inputPath, "nicepage.css")+ "' to '" + Path.Combine(outputPath, "wwwroot", "nicepage", "css", "nicepage.css") + "'.");
             
-            Directory.Move(Path.Combine(inputPath, "images"), Path.Combine(outputPath, "wwwroot", "nicepage", "images"));
-            
+            File.Copy(Path.Combine(inputPath, "nicepage.js"), Path.Combine(outputPath, "wwwroot", "nicepage", "js", "nicepage.js"));
+            if(debug)
+                Log.Logger.Debug("Copyed '" + Path.Combine(inputPath, "nicepage.js")+ "' to '" + Path.Combine(outputPath, "wwwroot", "nicepage", "css", "nicepage.css") + "'.");
+
+            File.Copy(Path.Combine(inputPath, "jquery.js"), Path.Combine(outputPath, "wwwroot", "nicepage", "js", "jquery.js"));
+            if(debug)
+                Log.Logger.Debug("Copyed '" + Path.Combine(inputPath, "jquery.js")+ "' to '" + Path.Combine(outputPath, "wwwroot", "nicepage", "js", "jquery.js") + "'.");
+
+            //Directory.Move(Path.Combine(inputPath, "images"), Path.Combine(outputPath, "wwwroot", "nicepage", "images"));
+            FileSystem.CopyDirectory(Path.Combine(inputPath, "images"), Path.Combine(outputPath, "wwwroot", "nicepage", "images"));
+            if(debug)
+                Log.Logger.Debug("Copyed '" + Path.Combine(inputPath, "images")+ "' to '" + Path.Combine(outputPath, "wwwroot", "nicepage", "images") + "'.");
+
             
             Directory.CreateDirectory(Path.Combine(outputPath, "Pages", "nicepage"));
-
+            if(debug)
+                Log.Logger.Debug("Folder '" + Path.Combine(outputPath, "Pages", "nicepage") + "' created!");
+            
             var files = Directory.GetFiles(inputPath).ToList();
 
             
@@ -118,11 +164,13 @@ namespace NTOB
                 string str = File.ReadAllText(file);
                 str = str.Replace("images/","nicepage/images/");
                 File.WriteAllText(file, str);
+                if(debug)
+                    Log.Logger.Debug("Replaced 'images/' to 'nicepage/images/' in '" + file + "'.");
                 
                 int i = files.IndexOf(file);
                 FileInfo fileInfo = new FileInfo(file);
                 string fileContont = File.ReadAllText(file);
-                
+
                 if(fileInfo.Extension == ".html")
                 {
                     HtmlDocument doc = new HtmlDocument();
@@ -148,10 +196,27 @@ namespace NTOB
                         
                         
                         File.WriteAllText (Path.Combine(outputPath, "Shared", "MainLayout.razor"), sb.ToString());
+                        if(debug)
+                            Log.Logger.Debug("Created '" + Path.Combine(outputPath, "Shared", "MainLayout.razor") + "'.");
 
                         var content = File.ReadAllLines(Path.Combine(outputPath, "Pages", "_Layout.cshtml")).ToList();
                         content.Insert(12, "<link href='nicepage/css/nicepage.css' rel='stylesheet' media='screen'/>");
-                        File.WriteAllLines(Path.Combine(outputPath, "Pages", "_Layout.cshtml"), content); 
+                        File.WriteAllLines(Path.Combine(outputPath, "Pages", "_Layout.cshtml"), content);
+                        if(debug)
+                            Log.Logger.Debug("Added 'nicepage/csCs/nicepage.css' to '" + Path.Combine(outputPath, "Pages", "_Layout.cshtml") + "'.");
+                        
+                        StringBuilder fText2 = new StringBuilder();
+
+                        fText2.AppendLine("@page " + '"' + "/" + '"');
+                        fText2.AppendLine(body.InnerHtml);
+                    
+                        File.WriteAllText(file, fText2.ToString());
+                        
+                    
+                        File.Copy(file, Path.Combine(outputPath, "Pages", "index.razor"));
+                        if(debug)
+                            Log.Logger.Debug("Created '" + Path.Combine(outputPath, "Pages", "index.razor") + "'.");
+                        
                     }
 
                     body.SelectSingleNode("//header").Remove();
@@ -162,18 +227,22 @@ namespace NTOB
                     fText.AppendLine(body.InnerHtml);
                     
                     File.WriteAllText(file, fText.ToString());
-                    
+
                     var fileName = Path.GetFileName(file);
                     var newFileName = fileName.Replace(".html", ".razor");
                     
-                    File.Move(file, Path.Combine(outputPath, "Pages", "nicepage", newFileName));
+                    File.Copy(file, Path.Combine(outputPath, "Pages", "nicepage", newFileName));
+                    if(debug)
+                        Log.Logger.Debug("Created '" + Path.Combine(outputPath, "Pages", "nicepage", newFileName) + "'.");
                 }
                 else if (fileInfo.Extension == ".css")
                 {
                     var fileName = Path.GetFileName(file);
                     var newFileName = fileName.Replace(".css", ".razor.css");
 
-                    File.Move(file, Path.Combine(outputPath, "Pages", "nicepage", newFileName));
+                    File.Copy(file, Path.Combine(outputPath, "Pages", "nicepage", newFileName));
+                    if(debug)
+                        Log.Logger.Debug("Created '" + Path.Combine(outputPath, "Pages", "nicepage", newFileName) + "'.");
                 }
 
 
