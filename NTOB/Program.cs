@@ -157,7 +157,8 @@ namespace NTOB
             
             var files = Directory.GetFiles(inputPath).ToList();
 
-            
+            int i = 0;
+
             foreach (var file in files)
             {
 
@@ -167,7 +168,6 @@ namespace NTOB
                 if(debug)
                     Log.Logger.Debug("Replaced 'images/' to 'nicepage/images/' in '" + file + "'.");
                 
-                int i = files.IndexOf(file);
                 FileInfo fileInfo = new FileInfo(file);
                 string fileContont = File.ReadAllText(file);
 
@@ -179,8 +179,9 @@ namespace NTOB
                     var body = doc.DocumentNode.SelectSingleNode("//body");
                     var header = doc.DocumentNode.SelectSingleNode("//header");
                     var head = doc.DocumentNode.SelectSingleNode("//head");
-                    if (i == 1)
+                    if (i == 0)
                     {
+                        i++;
                         StringBuilder sb = new StringBuilder();
                         StringBuilder bodyClasses = new StringBuilder();
                         foreach (var classes in body.GetClasses())
@@ -203,7 +204,7 @@ namespace NTOB
                         content.Insert(12, "<link href='nicepage/css/nicepage.css' rel='stylesheet' media='screen'/>");
                         File.WriteAllLines(Path.Combine(outputPath, "Pages", "_Layout.cshtml"), content);
                         if(debug)
-                            Log.Logger.Debug("Added 'nicepage/csCs/nicepage.css' to '" + Path.Combine(outputPath, "Pages", "_Layout.cshtml") + "'.");
+                            Log.Logger.Debug("Added 'nicepage/css/nicepage.css' to '" + Path.Combine(outputPath, "Pages", "_Layout.cshtml") + "'.");
                         
                         StringBuilder fText2 = new StringBuilder();
 
@@ -213,9 +214,13 @@ namespace NTOB
                         File.WriteAllText(file, fText2.ToString());
                         
                     
-                        File.Copy(file, Path.Combine(outputPath, "Pages", "index.razor"));
+                        File.Copy(file, Path.Combine(outputPath, "Pages", "Index.razor"));
                         if(debug)
-                            Log.Logger.Debug("Created '" + Path.Combine(outputPath, "Pages", "index.razor") + "'.");
+                            Log.Logger.Debug("Created '" + Path.Combine(outputPath, "Pages", "Index.razor") + "'.");
+                        
+                        File.Copy(file.Replace(".html", ".css"), Path.Combine(outputPath, "Pages", "Index.razor.css"));
+                        if(debug)
+                            Log.Logger.Debug("Created '" + Path.Combine(outputPath, "Pages", "Index.razor.css") + "'.");
                         
                     }
 
@@ -238,6 +243,10 @@ namespace NTOB
                 else if (fileInfo.Extension == ".css")
                 {
                     var fileName = Path.GetFileName(file);
+                    
+                    if(fileName.Equals("nicepage.css"))
+                        continue;
+                    
                     var newFileName = fileName.Replace(".css", ".razor.css");
 
                     File.Copy(file, Path.Combine(outputPath, "Pages", "nicepage", newFileName));
